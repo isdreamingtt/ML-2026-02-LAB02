@@ -24,37 +24,48 @@ st.set_page_config(page_title="Embeddings faciales", layout="wide")
 
 
 @st.cache_resource
-def obtener_servicio() -> ServicioReconocimiento:
-    return ServicioReconocimiento()
+def obtener_servicio(dataset: str) -> ServicioReconocimiento:
+    return ServicioReconocimiento(dataset=dataset)
 
 
 def main() -> None:
-    servicio = obtener_servicio()
     st.title("Reconocimiento de rostros con embeddings lineales")
-    st.caption(
-        "Cada fotografía pertenece al conjunto de prueba de Olivetti "
-        f"({servicio.particion.images_test.shape[0]} imágenes). "
-        "No participó del ajuste de PCA, LDA ni del clasificador."
-    )
 
     with st.sidebar:
         st.header("Modelo")
-        embedding = st.radio("Representación", options=["pca", "lda"], format_func=_etiqueta_embedding)
+        dataset = st.radio(
+            "Base de datos",
+            options=["olivetti", "lfw"],
+            format_func=_etiqueta_dataset,
+        )
+        embedding = st.radio(
+            "Representación",
+            options=["pca", "lda", "fisherfaces"],
+            format_func=_etiqueta_embedding,
+        )
         clasificador = st.radio(
             "Clasificador",
             options=["svm", "knn", "arbol"],
             format_func=_etiqueta_clasificador,
         )
         d = st.select_slider("Componentes (d)", options=list(DIMENSIONES))
-        st.info(
-            "Fisherfaces queda como TODO(alumno) en src/embeddings/fisherfaces.py. "
-            "La interfaz usa solo PCA y LDA, que ya están ajustados en TRAIN."
-        )
+
+    with st.spinner(f"Cargando {_etiqueta_dataset(dataset)}..."):
+        servicio = obtener_servicio(dataset)
+
+    st.caption(
+        f"Cada fotografía pertenece al conjunto de prueba de {_etiqueta_dataset(dataset)} "
+        f"({servicio.particion.images_test.shape[0]} imágenes, {servicio.conjunto.n_clases} identidades). "
+        "No participó del ajuste de PCA, LDA, Fisherfaces ni del clasificador."
+    )
+
+    with st.sidebar:
         etiquetas = servicio.etiquetas_prueba()
         indice = st.selectbox(
             "Fotografía de prueba",
             options=range(len(etiquetas)),
             format_func=lambda i: etiquetas[i],
+            key=f"foto_{dataset}",
         )
 
     with st.spinner("Cargando el modelo ajustado en TRAIN..."):
@@ -89,8 +100,12 @@ def main() -> None:
         )
 
 
+def _etiqueta_dataset(nombre: str) -> str:
+    return {"olivetti": "Olivetti", "lfw": "LFW"}[nombre]
+
+
 def _etiqueta_embedding(nombre: str) -> str:
-    return {"pca": "PCA", "lda": "LDA"}[nombre]
+    return {"pca": "PCA", "lda": "LDA", "fisherfaces": "Fisherfaces"}[nombre]
 
 
 def _etiqueta_clasificador(nombre: str) -> str:
